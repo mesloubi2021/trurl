@@ -29,47 +29,6 @@
 
 #include "version.h"
 
-static void help(const char *msg)
-{
-  if(msg != NULL)
-    fprintf(stderr, "%s:\n\n", msg);
-  fprintf(stderr, "Usage: [options] [URL]\n"
-          "  -h                    - this help\n"
-          " INPUT\n"
-          "  --fragment [fragment] - set this fragment\n"
-          "  --host [host]         - set this host name\n"
-          "  --options [options]   - set these options\n"
-          "  --password [secret]   - set this password\n"
-          "  --path [path]         - set this path\n"
-          "  --port [port]         - set this port number\n"
-          "  --query [query]       - set this query\n"
-          "  --redirect [URL]      - redirect the base URL to this\n"
-          "  --scheme [scheme]     - set this scheme\n"
-          "  --url [base URL]      - URL to start with\n"
-          "  --user [name]         - set this user\n"
-          "  --zoneid [zoneid]     - set this zone id\n"
-          " OUTPUT\n"
-
-          "  --only-fragment       - output only the fragment part"
-          "  --only-host           - output only the host part"
-          "  --only-options        - output only the options part"
-          "  --only-password       - output only the password part"
-          "  --only-path           - output only the path part"
-          "  --only-port           - output only the port part"
-          "  --only-query          - output only the query part"
-          "  --only-scheme         - output only the scheme part"
-          "  --only-user           - output only the user part"
-          "  --only-zoneid         - output only the zoneid part"
-    );
-  exit(1);
-}
-
-static void show_version(void)
-{
-  fputs("urler version " URLER_VERSION_TXT "\n", stdout);
-  exit(0);
-}
-
 #define OUTPUT_URL      0  /* default */
 #define OUTPUT_SCHEME   1
 #define OUTPUT_USER     2
@@ -81,7 +40,48 @@ static void show_version(void)
 #define OUTPUT_QUERY    8
 #define OUTPUT_FRAGMENT 9
 #define OUTPUT_ZONEID   10
+#define PROGNAME        "urler"
 
+static void help(const char *msg)
+{
+  if(msg != NULL)
+    fprintf(stderr, "%s:\n\n", msg);
+  fprintf(stderr, "Usage: [options] [URL]\n"
+          "  -h,--help             - this help\n"
+          "  -v,--version          - show version\n"
+          " INPUT\n"
+          "  --redirect [URL]          - redirect the base URL to this\n"
+          "  --set-fragment [fragment] - set this fragment\n"
+          "  --set-host [host]         - set this host name\n"
+          "  --set-options [options]   - set these options\n"
+          "  --set-password [secret]   - set this password\n"
+          "  --set-path [path]         - set this path\n"
+          "  --set-port [port]         - set this port number\n"
+          "  --set-query [query]       - set this query\n"
+          "  --set-scheme [scheme]     - set this scheme\n"
+          "  --set-user [name]         - set this user\n"
+          "  --set-zoneid [zoneid]     - set this zone id\n"
+          "  --url [base URL]          - URL to start with\n"
+          " OUTPUT\n"
+          "  --get-fragment  - output only the fragment part\n"
+          "  --get-host      - output only the host part\n"
+          "  --get-options   - output only the options part\n"
+          "  --get-password  - output only the password part\n"
+          "  --get-path      - output only the path part\n"
+          "  --get-port      - output only the port part\n"
+          "  --get-query     - output only the query part\n"
+          "  --get-scheme    - output only the scheme part\n"
+          "  --get-user      - output only the user part\n"
+          "  --get-zoneid    - output only the zoneid part\n"
+    );
+  exit(1);
+}
+
+static void show_version(void)
+{
+  fputs(PROGNAME " version " URLER_VERSION_TXT "\n", stdout);
+  exit(0);
+}
 
 struct option {
   const char *url;
@@ -104,52 +104,54 @@ static int getlongarg(struct option *op,
                       const char *flag,
                       const char *arg)
 {
+  if(!strcmp("--help", flag))
+    help(NULL);
   if(!strcmp("--version", flag))
     show_version();
   if(!strcmp("--url", flag))
     op->url = arg;
-  else if(!strcmp("--host", flag))
+  else if(!strcmp("--set-host", flag))
     op->host = arg;
-  else if(!strcmp("--scheme", flag))
+  else if(!strcmp("--set-scheme", flag))
     op->scheme = arg;
-  else if(!strcmp("--port", flag))
+  else if(!strcmp("--set-port", flag))
     op->port = arg;
-  else if(!strcmp("--user", flag))
+  else if(!strcmp("--set-user", flag))
     op->user = arg;
-  else if(!strcmp("--password", flag))
+  else if(!strcmp("--set-password", flag))
     op->password = arg;
-  else if(!strcmp("--options", flag))
+  else if(!strcmp("--set-options", flag))
     op->options = arg;
-  else if(!strcmp("--path", flag))
+  else if(!strcmp("--set-path", flag))
     op->path = arg;
-  else if(!strcmp("--query", flag))
+  else if(!strcmp("--set-query", flag))
     op->query = arg;
-  else if(!strcmp("--fragment", flag))
+  else if(!strcmp("--set-fragment", flag))
     op->fragment = arg;
-  else if(!strcmp("--zoneid", flag))
+  else if(!strcmp("--set-zoneid", flag))
     op->zoneid = arg;
   else if(!strcmp("--redirect", flag))
     op->redirect = arg;
 
-  else if(!strcmp("--only-scheme", flag))
+  else if(!strcmp("--get-scheme", flag))
     op->output = OUTPUT_SCHEME;
-  else if(!strcmp("--only-user", flag))
+  else if(!strcmp("--get-user", flag))
     op->output = OUTPUT_USER;
-  else if(!strcmp("--only-password", flag))
+  else if(!strcmp("--get-password", flag))
     op->output = OUTPUT_PASSWORD;
-  else if(!strcmp("--only-options", flag))
+  else if(!strcmp("--get-options", flag))
     op->output = OUTPUT_OPTIONS;
-  else if(!strcmp("--only-host", flag))
+  else if(!strcmp("--get-host", flag))
     op->output = OUTPUT_HOST;
-  else if(!strcmp("--only-port", flag))
+  else if(!strcmp("--get-port", flag))
     op->output = OUTPUT_PORT;
-  else if(!strcmp("--only-path", flag))
+  else if(!strcmp("--get-path", flag))
     op->output = OUTPUT_PATH;
-  else if(!strcmp("--only-query", flag))
+  else if(!strcmp("--get-query", flag))
     op->output = OUTPUT_QUERY;
-  else if(!strcmp("--only-fragment", flag))
+  else if(!strcmp("--get-fragment", flag))
     op->output = OUTPUT_FRAGMENT;
-  else if(!strcmp("--only-zoneid", flag))
+  else if(!strcmp("--get-zoneid", flag))
     op->output = OUTPUT_ZONEID;
   return 0;
 }
@@ -265,9 +267,16 @@ int main(int argc, const char **argv)
       cpart = CURLUPART_QUERY;
       name = "query";
       break;
+    case OUTPUT_FRAGMENT:
+      cpart = CURLUPART_FRAGMENT;
+      name = "fragment";
+      break;
     case OUTPUT_ZONEID:
       cpart = CURLUPART_ZONEID;
       name = "zoneid";
+      break;
+    default:
+      fprintf(stderr, "internal error, file an issue!\n");
       break;
     }
     if(!curl_url_get(uh, cpart, &nurl, CURLU_DEFAULT_PORT)) {
@@ -275,9 +284,15 @@ int main(int argc, const char **argv)
       curl_free(nurl);
     }
     else {
-      fprintf(stderr, "not enough input to show %s (urle -h for help)\n",
-              name);
-      exit_status = 1;
+      if(o.url) {
+        /* if a URL was given, this just means that the URL did not have
+           this component */
+      }
+      else {
+        fprintf(stderr, "not enough input to show %s (%s -h for help)\n",
+                name, PROGNAME);
+        exit_status = 1;
+      }
     }
   }
   else {
@@ -287,7 +302,8 @@ int main(int argc, const char **argv)
       curl_free(nurl);
     }
     else {
-      fprintf(stderr, "not enough input for a URL (urle -h for help)\n");
+      fprintf(stderr, "not enough input for a URL (%s -h for help)\n",
+              PROGNAME);
       exit_status = 1;
     }
   }
