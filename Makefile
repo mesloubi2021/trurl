@@ -1,18 +1,25 @@
-TARGET = urler
-OBJS = urler.o
+TARGET = trurl
+OBJS = trurl.o
 LDLIBS = -lcurl
 CFLAGS := $(CFLAGS) -W -Wall -pedantic -g
-MANUAL = urler.1
+MANUAL = trurl.1
 
-BINDIR ?= /usr/bin
-MANDIR ?= /usr/share/man
+PREFIX ?= /usr/local
+BINDIR ?= $(DESTDIR)$(PREFIX)/bin
+MANDIR ?= $(DESTDIR)$(PREFIX)/share/man/man1
 
 $(TARGET): $(OBJS)
 
+trurl.o:trurl.c version.h
+
 install:
-	install -d $(DESTDIR)$(BINDIR)
-	install -m 0755 $(TARGET) $(DESTDIR)$(BINDIR)
-	install -m 0744 $(MANUAL) $(MANDIR)/man1/
+	install -d $(BINDIR)
+	install -m 0755 $(TARGET) $(BINDIR)
+	install -d $(MANDIR)
+	install -m 0744 $(MANUAL) $(MANDIR)
 
 clean:
 	rm -f $(OBJS) $(TARGET)
+
+test:
+	@perl test.pl

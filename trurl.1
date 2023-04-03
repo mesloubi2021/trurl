@@ -1,0 +1,113 @@
+.\" You can view this file with:
+.\" man -l trurl.1
+.\" Written by Daniel Stenberg
+.\"
+.TH trurl 1 "31 Mar 2023" "trurl 0.1" "trurl Manual"
+.SH NAME
+trurl \- transpose URLs
+.SH SYNOPSIS
+.B trurl [options]
+.SH DESCRIPTION
+.B trurl
+parses, manipulates and outputs URLs and parts of URLs.
+
+It uses the RFC 3986 definition of URLs and it uses libcurl's URL parser to do
+so, which includes a few "extensions".
+
+Typically you set a few inputs and decide what of that you want output.
+.SH "MISC OPTIONS"
+.IP "-h, --help"
+Show the help output.
+.IP "-v, --version"
+Show version information and exit.
+.SH "INPUT OPTIONS"
+.IP "--url [URL]"
+Set the input URL to work with. The URL may be provided without a scheme,
+which then typically is not actually a legal URL but trurl will try to figure
+out what is meant and guess what scheme to use.
+
+Providing multiple URLs will make trurl act on all URLs in a serial fashion.
+.IP "--url-file [name]"
+Read URLs to work on from the given file. Use the file name "-" (a single
+minus) to tell trurl to read the URLs from stdin.
+
+Each line needs to be a single valid URL and the line needs to end with a
+newline. The maximum URL length supported in a file like this is 4095 bytes.
+.IP "--redirect [URL]"
+Redirect the base URL to this. It requires that you set the base url with \fB--url\fP
+.IP "--append [component]=[data]"
+Append data to a component. This can only append data to the path and the
+query component.
+
+For path:, this URL encodes and appends this segment to the path, separated
+with a slash.
+
+For query, this URL encodes and appends this segment to the query, separated
+with an ampersand (&). If the segment contains an equal sign ('=') that will
+be kept verbatim and both sides of the first occrance will be URL encoded
+separately.
+.IP "--set [component]=[data]"
+Set this URL component. Setting blank string ("") will clear it from the
+URL.
+
+The following components can be set: url, scheme, user, password,
+options, host, port, path, query, fragment and zoneid.
+.SH "OUTPUT OPTIONS"
+.IP "--get [format]"
+Output data according to the provided format string. Components from the URL
+can be output when specified as \fB{component}\fP, with the name of the part
+within curly braces. The following component names are available: {url},
+{scheme}, {user}, {password}, {options}, {host}, {port}, {path}, {query},
+{fragment} and {zoneid}.
+.SH "MODIFIERS"
+.IP "--urldecode"
+By default each component is output using the format of the input (URL
+encoded). This option makes trurl instead provide it URL decoded. Note that
+%20 will then output space and %09 a tab etc.
+.SH EXAMPLES
+.IP "Replace the host name of a URL"
+.nf
+$ trurl --url https://curl.se --set host=example.com
+https://example.com/
+.fi
+.IP "Create a URL by setting components"
+.nf
+ $ trurl --set host=example.com --set scheme=ftp
+ ftp://example.com/
+.fi
+.IP "Redirect a URL"
+.nf
+$ trurl --url https://curl.se/we/are.html --redirect here.html
+https://curl.se/we/here.html
+.fi
+.IP "Change port number"
+This also shows how trurl will remove dot-dot sequences
+
+.nf
+$ trurl --url https://curl.se/we/../are.html --set port=8080
+https://curl.se:8080/are.html
+.IP "Extract the path from a URL"
+.nf
+$ trurl --url https://curl.se/we/are.html --get '{path}'
+/we/are.html
+.IP "Extract the port from a URL"
+This gets the default port based on the scheme if the port is not set in the
+URL.
+
+.nf
+$ trurl --url https://curl.se/we/are.html --get '{port}'
+443
+.IP "Append a path segment to a URL"
+.nf
+$ trurl --url https://curl.se/hello --append path=you
+https://curl.se/hello/you
+.IP "Append a query segment to a URL"
+.nf
+$ trurl --url "https://curl.se?name=hello" --append query=search=string
+ https://curl.se/?name=hello&search=string
+.IP "Read URLs from stdin"
+.nf
+$ cat urllist.txt | trurl --url-file -
+...
+.SH WWW
+https://github.com/curl/trurl
