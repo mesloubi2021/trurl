@@ -10,6 +10,7 @@ MANDIR ?= $(PREFIX)/share/man/man1
 
 INSTALL ?= install
 PYTHON3 ?= python3
+PERL ?= perl
 
 $(TARGET): $(OBJS)
 	$(CC) $(OBJS) -o $(TARGET) $(LDLIBS) $(LDFLAGS)
@@ -30,6 +31,10 @@ clean:
 .PHONY: test
 test: $(TARGET)
 	@$(PYTHON3) test.py
+
+.PHONY: perl-test
+perl-test: $(TARGET)
+	@$(PERL) test.pl
 
 .PHONY: test-memory
 test-memory: $(TARGET)
