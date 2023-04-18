@@ -9,8 +9,8 @@ use JSON::PP;
 use Cwd qw(realpath);
 use File::Basename qw(dirname);
 use File::Spec::Functions qw(catfile curdir);
-use IO::All; # may need libio-all-perl
-use IPC::Run qw(start finish);
+use IO::All; # libio-all-perl
+use IPC::Run qw(start finish); # libipc-run-perl
 use Text::ParseWords qw(shellwords);
 
 use constant PROGNAME => 'trurl';
