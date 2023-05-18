@@ -1,0 +1,21 @@
+# Namespaced project name that the target belongs to
+project: trurl
+
+# Target name (should be unique within the project)
+target: trurl
+
+# Base image to run the binary in.
+image: ghcr.io/ladylandshark/trurl:latest
+
+# Testsuite info
+#testsuite:
+#  - https://mayhem.forallsecure.com/ladylandshark/trurl/testsuite.tar
+#  - file://testsuite
+
+
+# List of commands used to test the target
+cmds:
+
+    # Command used to start the target, "@@" is the input file
+    # (when "@@" is omitted Mayhem defaults to stdin inputs)
+    - cmd: /trurl -f @@
