@@ -98,13 +98,13 @@ my %warnings = (
     );
 
 sub readskiplist {
-    open(W, "<$dir/checksrc.skip") or return;
-    my @all=<W>;
+    open(my $W, '<', "$dir/checksrc.skip") or return;
+    my @all=<$W>;
     for(@all) {
         $windows_os ? $_ =~ s/\r?\n$// : chomp;
         $skiplist{$_}=1;
     }
-    close(W);
+    close($W);
 }
 
 # Reads the .checksrc in $dir for any extended warnings to enable locally.
@@ -380,7 +380,7 @@ sub scanfile {
     my $l = "";
     my $prep = 0;
     my $prevp = 0;
-    open(R, "<$file") || die "failed to open $file";
+    open(my $R, '<', $file) || die "failed to open $file";
 
     my $incomment=0;
     my @copyright=();
@@ -388,7 +388,7 @@ sub scanfile {
     checksrc_clear(); # for file based ignores
     accept_violations();
 
-    while(<R>) {
+    while(<$R>) {
         $windows_os ? $_ =~ s/\r?\n$// : chomp;
         my $l = $_;
         my $ol = $l; # keep the unmodified line for error reporting
@@ -531,7 +531,7 @@ sub scanfile {
             }
             elsif(($first eq "*") && ($word !~ /(for|if|while|switch)/)) {
                 # A "(*" beginning makes the space OK because it wants to
-                # allow funcion pointer declared
+                # allow function pointer declared
             }
             elsif($1 =~ / *typedef/) {
                 # typedefs can use space-paren
@@ -883,7 +883,7 @@ sub scanfile {
         checkwarn("COPYRIGHT", 1, 0, $file, "", "Missing copyright statement", 1);
     }
 
-    # COPYRIGHTYEAR is a extended warning so we must first see if it has been
+    # COPYRIGHTYEAR is an extended warning so we must first see if it has been
     # enabled in .checksrc
     if(defined($warnings{"COPYRIGHTYEAR"})) {
         # The check for updated copyrightyear is overly complicated in order to
@@ -933,7 +933,7 @@ sub scanfile {
 
     checksrc_endoffile($file);
 
-    close(R);
+    close($R);
 
 }
 

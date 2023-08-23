@@ -29,6 +29,7 @@
 #include <stdbool.h>
 #include <curl/curl.h>
 #include <curl/mprintf.h>
+#include <stdint.h>
 
 #include <locale.h> /* for setlocale() */
 
@@ -77,7 +78,7 @@
 #define REPLACE_NULL_BYTE '.' /* for query:key extractions */
 
 enum {
-  VARMODIFIER_URLDECODED = 1 << 1,
+  VARMODIFIER_URLENCODED = 1 << 1,
   VARMODIFIER_DEFAULT    = 1 << 2,
   VARMODIFIER_PUNY       = 1 << 3,
 };
@@ -85,6 +86,11 @@ enum {
 struct var {
   const char *name;
   CURLUPart part;
+};
+
+struct string {
+  char *str;
+  size_t len;
 };
 
 static const struct var variables[] = {
@@ -182,6 +188,7 @@ static void help(void)
     "      --sort-query                 - alpha-sort the query pairs\n"
     "      --trim [component]=[what]    - trim component\n"
     "      --url [URL]                  - URL to work with\n"
+    "      --urlencode                  - URL encode components by default\n"
     "  -v, --version                    - show version\n"
     "      --verify                     - return error on (first) bad URL\n"
     " URL COMPONENTS:\n"
@@ -255,16 +262,16 @@ struct option {
   bool punycode;
   bool sort_query;
   bool no_guess_scheme;
+  bool urlencode;
   bool end_of_options;
-  unsigned char output;
 
   /* -- stats -- */
   unsigned int urls;
 };
 
 #define MAX_QPAIRS 1000
-char *qpairs[MAX_QPAIRS]; /* encoded */
-char *qpairsdec[MAX_QPAIRS]; /* decoded */
+struct string qpairs[MAX_QPAIRS]; /* encoded */
+struct string qpairsdec[MAX_QPAIRS]; /* decoded */
 int nqpairs; /* how many is stored */
 
 static char *strurldecode(const char *url, int inlength, int *outlength)
@@ -473,6 +480,8 @@ static int getarg(struct option *op,
     op->no_guess_scheme = true;
   else if(!strcmp("--sort-query", flag))
     op->sort_query = true;
+  else if(!strcmp("--urlencode", flag))
+    op->urlencode = true;
   else
     return 1;  /* unrecognized option */
   return 0;
@@ -483,14 +492,14 @@ static void showqkey(FILE *stream, const char *key, size_t klen,
 {
   int i;
   bool shown = false;
-  char **qp = urldecode ? qpairsdec : qpairs;
+  struct string *qp = urldecode ? qpairsdec : qpairs;
 
   for(i = 0; i< nqpairs; i++) {
-    if(!strncmp(key, qp[i], klen) &&
-       (qp[i][klen] == '=')) {
+    if(!strncmp(key, qp[i].str, klen) &&
+       (qp[i].str[klen] == '=')) {
       if(shown)
         fputc(' ', stream);
-      fputs(&qp[i][klen + 1], stream);
+      fputs(&qp[i].str[klen + 1], stream);
       if(!showall)
         break;
       shown = true;
@@ -523,8 +532,9 @@ static CURLUcode geturlpart(struct option *o, int modifiers, CURLU *uh,
                        CURLU_PUNYCODE : 0)|
 #endif
                       CURLU_NON_SUPPORT_SCHEME|
-                      ((modifiers & VARMODIFIER_URLDECODED) ?
-                       CURLU_URLDECODE : 0));
+                      (((modifiers & VARMODIFIER_URLENCODED) ||
+                        o->urlencode) ?
+                       0 :CURLU_URLDECODE));
 }
 
 static void showurl(FILE *stream, struct option *o, int modifiers,
@@ -569,6 +579,7 @@ static void get(struct option *op, CURLU *uh)
         char *cl;
         size_t vlen;
         bool isquery = false;
+        bool queryall = false;
         int mods = 0;
         end = strchr(ptr, endbyte);
         ptr++; /* pass the { */
@@ -580,7 +591,7 @@ static void get(struct option *op, CURLU *uh)
 
         /* {path} {:path} */
         if(*ptr == ':') {
-          mods |= VARMODIFIER_URLDECODED;
+          mods |= VARMODIFIER_URLENCODED;
           ptr++;
         }
         vlen = end - ptr;
@@ -597,29 +608,28 @@ static void get(struct option *op, CURLU *uh)
           else {
             /* {query: or {query-all: */
             if(!strncmp(ptr, "query-all:", cl - ptr + 1)) {
-              showqkey(stream, cl + 1, end - cl - 1,
-                       (mods & VARMODIFIER_URLDECODED) == 0, true);
-            }
-            else if(!strncmp(ptr, "query:", cl - ptr + 1)) {
               isquery = true;
-              showqkey(stream, cl + 1, end - cl - 1,
-                       (mods & VARMODIFIER_URLDECODED) == 0, false);
+              queryall = true;
             }
+            else if(!strncmp(ptr, "query:", cl - ptr + 1))
+              isquery = true;
             else {
               /* syntax error */
               vlen = 0;
               end[1] = '\0';
-              break;
             }
-            isquery = true;
+            break;
           }
 
           ptr = cl + 1;
           vlen = end - ptr;
         } while(true);
 
-        if(isquery)
-          ;
+        if(isquery) {
+          showqkey(stream, cl + 1, end - cl - 1,
+                   !op->urlencode && !(mods & VARMODIFIER_URLENCODED),
+                   queryall);
+        }
         else if(!vlen)
           errorf(ERROR_GET, "Bad --get syntax: %s", start);
         else if(!strncmp(ptr, "url", vlen))
@@ -728,8 +738,8 @@ static unsigned int set(CURLU *uh,
   unsigned int mask = 0;
   for(node =  o->set_list; node; node = node->next) {
     const struct var *v;
-    char *set = node->data;
-    v = setone(uh, set);
+    char *setline = node->data;
+    v = setone(uh, setline);
     if(v) {
       if(mask & (1 << v->part))
         errorf(ERROR_SET, "duplicate --set for component %s", v->name);
@@ -744,7 +754,6 @@ static void jsonString(FILE *stream, const char *in, size_t len,
 {
   const unsigned char *i = (unsigned char *)in;
   const char *in_end = &in[len];
-
   fputc('\"', stream);
   for(; i < (unsigned char *)in_end; i++) {
     switch(*i) {
@@ -771,7 +780,7 @@ static void jsonString(FILE *stream, const char *in, size_t len,
       break;
     default:
       if(*i < 32)
-        fprintf(stream, "u%04x", *i);
+        fprintf(stream, "\\u%04x", *i);
       else {
         char out = *i;
         if(lowercase && (out >= 'A' && out <= 'Z'))
@@ -817,21 +826,22 @@ static void json(struct option *o, CURLU *uh)
     int j;
     fputs(",\n    \"params\": [\n", stdout);
     for(j = 0 ; j < nqpairs; j++) {
-      const char *sep = strchr(qpairsdec[j], '=');
+      const char *sep = strchr(qpairsdec[j].str, '=');
       const char *value = sep ? sep + 1 : "";
 
       /* don't print out empty/trimmed values */
-      if(!qpairsdec[j][0])
+      if(!qpairsdec[j].str[0])
         continue;
       if(!first)
         fputs(",\n", stdout);
       first = false;
       fputs("      {\n        \"key\": ", stdout);
-      jsonString(stdout, qpairsdec[j],
-                 sep ? (size_t)(sep - qpairsdec[j]) : strlen(qpairsdec[j]),
+      jsonString(stdout, qpairsdec[j].str,
+                 sep ? (size_t)(sep - qpairsdec[j].str) :
+                       qpairsdec[j].len,
                  false);
       fputs(",\n        \"value\": ", stdout);
-      jsonString(stdout, value, strlen(value), false);
+      jsonString(stdout, sep?value:"", sep?qpairsdec[j].len:0, false);
       fputs("\n      }", stdout);
     }
     fputs("\n    ]", stdout);
@@ -853,17 +863,34 @@ static void trim(struct option *o)
       /* 'ptr' should be a fixed string or a pattern ending with an
          asterisk */
       size_t inslen;
-      bool pattern;
+      bool pattern = false;
       int i;
+      char *temp = NULL;
 
       ptr++; /* pass the = */
       inslen = strlen(ptr);
-      pattern = ptr[inslen - 1] == '*';
-      if(pattern)
-        inslen--;
+      if(inslen) {
+        pattern = ptr[inslen - 1] == '*';
+        if(pattern && (inslen > 1)) {
+          pattern ^= ptr[inslen - 2] == '\\';
+          if(!pattern) {
+            /* the two final letters are \*, but the backslash needs to be
+               removed. Get a copy and edit that accordingly. */
+            temp = strdup(ptr);
+            if(!temp)
+              return; /* out of memory, bail out */
+            temp[inslen - 2] = '*';
+            temp[inslen - 1] = '\0';
+            ptr = temp;
+            inslen--; /* one byte shorter now */
+          }
+        }
+        if(pattern)
+          inslen--;
+      }
 
       for(i = 0 ; i < nqpairs; i++) {
-        char *q = qpairs[i];
+        char *q = qpairs[i].str;
         char *sep = strchr(q, '=');
         size_t qlen;
         if(sep)
@@ -876,60 +903,82 @@ static void trim(struct option *o)
            (!pattern && (inslen == qlen) &&
             !strncasecmp(q, ptr, inslen))) {
           /* this qpair should be stripped out */
-          free(qpairs[i]);
-          free(qpairsdec[i]);
-          qpairs[i] = strdup(""); /* marked as deleted */
-          qpairsdec[i] = strdup(""); /* marked as deleted */
+          free(qpairs[i].str);
+          free(qpairsdec[i].str);
+          qpairs[i].str = strdup(""); /* marked as deleted */
+          qpairs[i].len = 0;
+          qpairsdec[i].str = strdup(""); /* marked as deleted */
+          qpairsdec[i].len = 0;
         }
       }
+      free(temp);
     }
   }
 }
 
 /* memdup the amount and add a trailing zero */
-static char *memdupzero(char *source, size_t len)
+struct string *memdupzero(char *source, size_t len)
 {
-  char *p = malloc(len + 1);
-  if(p) {
-    memcpy(p, source, len);
-    p[len] = 0;
-    return p;
+  struct string *ret = malloc(sizeof(struct string));
+  if(!ret)
+    return NULL;
+  ret->str = malloc(len + 1);
+  if(!ret->str) {
+    free(ret);
+    return NULL;
   }
-  return NULL;
+  memcpy(ret->str, source, len);
+  ret->str[len] = 0;
+  ret->len = len;
+  return ret;
 }
 
 /* URL decode the pair and return it in an allocated chunk */
-static char *memdupdec(char *source, size_t len)
+struct string *memdupdec(char *source, size_t len, bool json)
 {
   char *sep = memchr(source, '=', len);
   char *left = NULL;
   char *right = NULL;
-  char *str, *dup;
-  int leftlen = 0;
-  int rightlen = 0;
+  int right_len = 0;
+  int left_len = 0;
+  char *str;
 
   left = strurldecode(source, sep ? (size_t)(sep - source) : len,
-                      &leftlen);
+                      &left_len);
   if(sep) {
     char *p;
     int plen;
-    right = strurldecode(sep + 1, len - (sep - source) - 1, &rightlen);
+    right = strurldecode(sep + 1, len - (sep - source) - 1,
+            (int *)&right_len);
 
     /* convert null bytes to periods */
-    for(plen = rightlen, p = right; plen; plen--, p++) {
-      if(!*p)
+    for(plen = right_len, p = right; plen; plen--, p++) {
+      if(!*p && !json) {
         *p = REPLACE_NULL_BYTE;
-    }
+      }
+     }
   }
 
-  str = curl_maprintf("%.*s%s%.*s", leftlen, left,
+  str = curl_maprintf("%.*s%s%.*s", left_len, left,
                       right ? "=":"",
-                      rightlen, right?right:"");
+                      right_len, right?right:"");
+  /* handle strings with null characters */
+  if(sep && right) {
+    memcpy(str + left_len + 1, right, right_len);
+  }
   curl_free(right);
   curl_free(left);
-  dup = strdup(str);
-  curl_free(str);
-  return dup;
+  struct string *ret = malloc(sizeof(struct string));
+  if(!ret) {
+    return NULL;
+  }
+  ret->str = str;
+  if(right)
+    ret->len = right_len;
+  else {
+    ret->len = left_len;
+  }
+  return ret;
 }
 
 
@@ -937,31 +986,41 @@ static void freeqpairs(void)
 {
   int i;
   for(i = 0; i<nqpairs; i++) {
-    free(qpairs[i]);
-    qpairs[i] = NULL;
-    free(qpairsdec[i]);
-    qpairsdec[i] = NULL;
+    free(qpairs[i].str);
+    qpairs[i].str = NULL;
+    free(qpairsdec[i].str);
+    qpairsdec[i].str = NULL;
   }
   nqpairs = 0;
 }
 
 /* store the pair both encoded and decoded */
-static char *addqpair(char *pair, size_t len)
+static char *addqpair(char *pair, size_t len, bool json)
 {
-  char *p = NULL;
-  char *pdec = NULL;
+  struct string *p = NULL;
+  struct string *pdec = NULL;
+  char *ret = NULL;
   if(nqpairs < MAX_QPAIRS) {
     p = memdupzero(pair, len);
-    pdec = memdupdec(pair, len);
+    pdec = memdupdec(pair, len, json);
     if(p && pdec) {
-      qpairs[nqpairs] = p;
-      qpairsdec[nqpairs] = pdec;
+      qpairs[nqpairs].str = p->str;
+      qpairs[nqpairs].len = p->len;
+      qpairsdec[nqpairs].str = pdec->str;
+      qpairsdec[nqpairs].len = pdec->len;
       nqpairs++;
     }
   }
   else
     warnf("too many query pairs");
-  return p;
+
+  if(p)
+    ret = p->str;
+  if(pdec)
+    free(pdec);
+  if(p)
+    free(p);
+  return ret;
 }
 
 /* convert the query string into an array of name=data pair */
@@ -981,7 +1040,7 @@ static void extractqpairs(CURLU *uh, struct option *o)
         len = strlen(p);
       else
         len = amp - p;
-      addqpair(p, len);
+      addqpair(p, len, o->jsonout);
       if(amp)
         p = amp + 1;
       else
@@ -994,17 +1053,16 @@ static void extractqpairs(CURLU *uh, struct option *o)
 static void qpair2query(CURLU *uh, struct option *o)
 {
   int i;
-  int rc;
   char *nq = NULL;
-  char *oldnq;
   for(i = 0; i<nqpairs; i++) {
-    oldnq = nq;
+    char *oldnq = nq;
     nq = curl_maprintf("%s%s%s", nq?nq:"",
-                       (nq && *nq && *qpairs[i])? o->qsep: "", qpairs[i]);
+                       (nq && *nq && *(qpairs[i].str))? o->qsep: "",
+                       qpairs[i].str);
     curl_free(oldnq);
   }
   if(nq) {
-    rc = curl_url_set(uh, CURLUPART_QUERY, nq, 0);
+    int rc = curl_url_set(uh, CURLUPART_QUERY, nq, 0);
     if(rc)
       warnf("internal problem");
   }
@@ -1014,16 +1072,25 @@ static void qpair2query(CURLU *uh, struct option *o)
 /* sort case insensitively */
 static int cmpfunc(const void *p1, const void *p2)
 {
-  return strcasecmp(*(const char **)p1,
-                    *(const char **)p2);
+  int len = (((struct string *)p1)->len) < (((struct string *)p2)->len)?
+             (((struct string *)p1)->len):(((struct string *)p2)->len);
+
+  for(int i = 0; i < len; i++) {
+    char c1 = ((struct string *)p1)->str[i] | ('a' - 'A');
+    char c2 = ((struct string *)p2)->str[i] | ('a' - 'A');
+    if(c1 != c2)
+      return c1 - c2;
+  }
+
+  return 0;
 }
 
 static void sortquery(struct option *o)
 {
   if(o->sort_query) {
     /* not these two lists may no longer be the same order after the sort */
-    qsort(&qpairs[0], nqpairs, sizeof(char *), cmpfunc);
-    qsort(&qpairsdec[0], nqpairs, sizeof(char *), cmpfunc);
+    qsort(&qpairs[0], nqpairs, sizeof(struct string), cmpfunc);
+    qsort(&qpairsdec[0], nqpairs, sizeof(struct string), cmpfunc);
   }
 }
 
@@ -1067,7 +1134,6 @@ static void singleurl(struct option *o,
     }
   }
   do {
-    char iterbuf[1024];
     struct curl_slist *p;
     bool url_is_invalid = false;
     unsigned setmask = 0;
@@ -1076,6 +1142,7 @@ static void singleurl(struct option *o,
     setmask = set(uh, o);
 
     if(iter) {
+      char iterbuf[1024];
       /* "part=item1 item2 item2" */
       const char *part;
       size_t plen;
@@ -1129,7 +1196,7 @@ static void singleurl(struct option *o,
                      urlencode ? "" : ":",
                      (int)wlen, w);
       setone(uh, iterbuf);
-      if(iter && iter->next) {
+      if(iter->next) {
         struct iterinfo info;
         memset(&info, 0, sizeof(info));
         info.uh = uh;
@@ -1165,13 +1232,13 @@ static void singleurl(struct option *o,
 
     extractqpairs(uh, o);
 
-    /* append query segments */
-    for(p = o->append_query; p; p = p->next) {
-      addqpair(p->data, strlen(p->data));
-    }
-
     /* trim parts */
     trim(o);
+
+    /* append query segments */
+    for(p = o->append_query; p; p = p->next) {
+      addqpair(p->data, strlen(p->data), o->jsonout);
+    }
 
     sortquery(o);
 

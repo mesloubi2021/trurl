@@ -1285,7 +1285,7 @@
                         "scheme": "https",
                         "host": "example.com",
                         "path": "/",
-                        "query": "utm=tra%20cker&address%20=home&here=now&thisthen"
+                        "query": "utm=tra cker&address =home&here=now&thisthen"
                     },
                     "params": [
                         {
@@ -1656,7 +1656,7 @@
     {
         "input": {
             "arguments": [
-                "imaps://user:pasword;crazy@[ff00::1234%hello]:1234/path?a=b&c=d#fragment",
+                "imaps://user:password;crazy@[ff00::1234%hello]:1234/path?a=b&c=d#fragment",
                 "--json"
             ]
         },
@@ -1664,11 +1664,11 @@
             "returncode": 0,
             "stdout": [
                 {
-                    "url": "imaps://user:pasword;crazy@[ff00::1234%25hello]:1234/path?a=b&c=d#fragment",
+                    "url": "imaps://user:password;crazy@[ff00::1234%25hello]:1234/path?a=b&c=d#fragment",
                     "parts": {
                         "scheme": "imaps",
                         "user": "user",
-                        "password": "pasword",
+                        "password": "password",
                         "options": "crazy",
                         "host": "[ff00::1234]",
                         "port": "1234",
@@ -1809,7 +1809,7 @@
         "input": {
             "arguments": [
                 "-f",
-                "/dev/null",
+                "testfiles/test0002.txt",
                 "--json"
             ]
         },
@@ -1833,6 +1833,285 @@
             "stdout": "http://localhost/?x=10&x=2+3\n",
             "returncode": 0,
             "stderr": ""
+        }
+    },
+    {
+        "input": {
+            "arguments": [
+                "-s",
+                "path=\\\\",
+                "-g",
+                "{path}\\n{:path}",
+                "localhost"
+            ]
+        },
+        "expected": {
+            "stdout": "/\\\\\n/%5c%5c\n",
+            "returncode": 0,
+            "stderr": ""
+        }
+    },
+    {
+        "input": {
+            "arguments": [
+                "-s",
+                "path=\\\\",
+                "--json",
+                "localhost"
+            ]
+        },
+        "expected": {
+            "stdout": [
+                {
+                    "url": "http://localhost/%5c%5c",
+                    "parts": {
+                        "scheme": "http",
+                        "host": "localhost",
+                        "path": "/\\\\"
+                    }
+                }
+            ],
+            "returncode": 0,
+            "stderr": ""
+        }
+    },
+    {
+        "input": {
+            "arguments": [
+                "-s",
+                "path=\\\\",
+                "-g",
+                "{path}\\n{:path}",
+                "--urlencode",
+                "localhost"
+            ]
+        },
+        "expected": {
+            "stdout": "/%5c%5c\n/%5c%5c\n",
+            "returncode": 0,
+            "stderr": ""
+        }
+    },
+    {
+        "input": {
+            "arguments": [
+                "-s",
+                "path=abc\\\\",
+                "-s",
+                "query:=a&b&a%26b",
+                "--urlencode",
+                "--json",
+                "localhost"
+            ]
+        },
+        "expected": {
+            "stdout": [
+                {
+                    "url": "http://localhost/abc%5c%5c?a&b&a%26b",
+                    "parts": {
+                        "scheme": "http",
+                        "host": "localhost",
+                        "path": "/abc%5c%5c",
+                        "query": "a&b&a%26b"
+                    },
+                    "params": [
+                        {
+                            "key": "a",
+                            "value": ""
+                        },
+                        {
+                            "key": "b",
+                            "value": ""
+                        },
+                        {
+                            "key": "a&b",
+                            "value": ""
+                        }
+                    ]
+                }
+            ],
+            "returncode": 0,
+            "stderr": ""
+        }
+    },
+    {
+        "input": {
+            "arguments": [
+                "-s",
+                "scheme:=http",
+                "-s",
+                "host:=localhost",
+                "-s",
+                "path:=/ABC%5C%5C",
+                "-s",
+                "query:=a&b&a%26b"
+            ]
+        },
+        "expected": {
+            "stdout": "http://localhost/ABC%5c%5c?a&b&a%26b\n",
+            "returncode": 0,
+            "stderr": ""
+        }
+    },
+    {
+        "input": {
+            "arguments": [
+                "-g",
+                "{query:b}\\t{query-all:a}\\n{:query:b}\\t{:query-all:a}",
+                "https://example.org/foo?a=1&b=%23&a=%26#hello"
+            ]
+        },
+        "expected": {
+            "stdout": "#\t1 &\n%23\t1 %26\n",
+            "returncode": 0,
+            "stderr": ""
+        }
+    },
+    {
+        "input": {
+            "arguments": [
+                "--urlencode",
+                "-g",
+                "{query:b}\\t{query-all:a}\\n{:query:b}\\t{:query-all:a}",
+                "https://example.org/foo?a=1&b=%23&a=%26#hello"
+            ]
+        },
+        "expected": {
+            "stdout": "%23\t1 %26\n%23\t1 %26\n",
+            "returncode": 0,
+            "stderr": ""
+        }
+    },
+    {
+        "input": {
+            "arguments": [
+                "-a",
+                "query=c=moo",
+                "--sort-query",
+                "https://example.org/foo?x=hi#rye"
+            ]
+        },
+        "expected": {
+            "stdout": "https://example.org/foo?c=moo&x=hi#rye\n",
+            "returncode": 0,
+            "stderr": ""
+        }
+    },
+    {
+        "input": {
+            "arguments": [
+                "--trim",
+                "query=a",
+                "-a",
+                "query=a=ciao",
+                "-a",
+                "query=b=salve",
+                "https://example.org/foo?a=hi&b=hello&x=y"
+            ]
+        },
+        "expected": {
+            "stdout": "https://example.org/foo?b=hello&x=y&a=ciao&b=salve\n",
+            "returncode": 0,
+            "stderr": ""
+        }
+    }, 
+    {
+        "input" : {
+            "arguments": [
+                "http://example.com/?q=mr%00smith",
+                "--json"
+            ]
+        },
+        "expected": {
+            "stderr": "",
+            "returncode": 0,
+            "stdout": [
+                {
+                    "url": "http://example.com/?q=mr%00smith",
+                    "parts": {
+                        "scheme": "http",
+                        "host": "example.com",
+                        "path": "/"
+                    },
+                    "params": [
+                        {
+                            "key": "q",
+                            "value": "mr\u0000smith"
+                        }
+                    ]
+                }
+            ]        
+        }
+    },
+    {
+        "input" : {
+            "arguments": [
+                "http://example.com/?q=mr%00sm%00ith",
+                "--json"
+            ]
+        },
+        "expected": {
+            "stderr": "",
+            "returncode": 0,
+            "stdout": [
+                {
+                    "url": "http://example.com/?q=mr%00sm%00ith",
+                    "parts": {
+                        "scheme": "http",
+                        "host": "example.com",
+                        "path": "/"
+                    },
+                    "params": [
+                        {
+                            "key": "q",
+                            "value": "mr\u0000sm\u0000ith"
+                        }
+                    ]
+                }
+            ]        
+        }
+    },
+    {
+        "input" : {
+            "arguments": [
+                "http://example.com/?q=mr%00%00%00smith",
+                "--json"
+            ]
+        },
+        "expected": {
+            "stderr": "",
+            "returncode": 0,
+            "stdout": [
+                {
+                    "url": "http://example.com/?q=mr%00%00%00smith",
+                    "parts": {
+                        "scheme": "http",
+                        "host": "example.com",
+                        "path": "/"
+                    },
+                    "params": [
+                        {
+                            "key": "q",
+                            "value": "mr\u0000\u0000\u0000smith"
+                        }
+                    ]
+                }
+            ]        
+        }
+    },
+    {
+        "input": {
+            "arguments": [
+                "--url",
+                "https://curl.se/we/are.html?*=moo&user=many#more",
+                "--trim",
+                "query=\\*"
+            ]
+        },
+        "expected": {
+            "stdout": "https://curl.se/we/are.html?user=many#more\n",
+            "stderr": "",
+            "returncode": 0
         }
     }
 ]
