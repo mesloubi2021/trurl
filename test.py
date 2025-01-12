@@ -91,6 +91,10 @@ class TestCase:
         if cmdfilter and all(cmdfilter not in arg for arg in self.arguments):
             return False
 
+        # change the null device name to "nul" if running on windows
+        if sys.platform == "win32" and "/dev/null" in self.arguments:
+            self.arguments = ["nul" if arg == "/dev/null" else arg for arg in self.arguments]
+
         cmd = [self.baseCmd]
         args = self.arguments
         if self.runnerCmd != "":
