@@ -43,6 +43,7 @@ COMPLETION_FILES=completions/_trurl.zsh
 
 INSTALL ?= install
 PYTHON3 ?= python3
+PERL ?= perl
 
 $(TARGET): $(OBJS)
 	$(CC) $(LDFLAGS) $(OBJS) -o $(TARGET) $(LDLIBS)
@@ -75,6 +76,10 @@ clean:
 .PHONY: test
 test: $(TARGET)
 	@$(PYTHON3) test.py
+
+.PHONY: perl-test
+perl-test: $(TARGET)
+	@$(PERL) test.pl
 
 .PHONY: test-memory
 test-memory: $(TARGET)
