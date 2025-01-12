@@ -1,5 +1,7 @@
 # compiled program
 /trurl
+/trurl.1
+_trurl.zsh
 
 # Prerequisites
 *.d
@@ -53,3 +55,13 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+# Output files from msvc
+winbuild/bin/
+winbuild/obj/
+
+# Dependencies for msvc from vcpkg
+winbuild/vcpkg_installed/
+
+# vim
+*.sw*
