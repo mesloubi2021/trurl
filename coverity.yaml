@@ -1,0 +1,10 @@
+analyze:
+  location: local
+capture:
+  build:
+    build-command: make
+    clean-command: make clean
+commit:
+  connect:
+    stream: urler
+    url: http://192.168.0.24:8081
